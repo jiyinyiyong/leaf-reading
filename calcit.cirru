@@ -260,11 +260,13 @@
           :examples $ []
         'repeat! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn repeat! (duration cb)
-            js/setTimeout
-              fn () (cb)
-                repeat! (* 1000 duration) cb
-              * 1000 duration
+            host/set-interval! cb $ * 1000 duration
+            , &unit
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number $ :: 'Fn
+              {} (:return 'Unit)
+                :args $ []
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.main
           :require
