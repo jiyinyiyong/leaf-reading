@@ -1,10 +1,17 @@
 {
   "dependencies": {
-    "@calcit/procs": "^0.6.1",
-    "@mvc-works/codearea": "^0.0.3"
+    "@calcit/procs": "0.29.0",
+    "@mvc-works/codearea": "0.0.3"
   },
   "devDependencies": {
-    "vite": "^3.0.3"
+    "vite": "8.3.4"
   },
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "packageManager": "yarn@4.12.0",
+  "scripts": {
+    "compile": "calcit calcit.cirru",
+    "watch": "calcit calcit.cirru -w",
+    "dev": "yarn compile && vite",
+    "build": "yarn compile && vite build"
+  }
 }
