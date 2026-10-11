@@ -10,6 +10,11 @@
   :files $ {}
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
+        'Leaf $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defenum Leaf (:line 'String)
+            :branch $ :: 'List 'app.comp.container/Leaf
+          :examples $ []
+          :schema $ :: 'EnumDef
         'comp-container $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-container (reel)
             let
@@ -46,7 +51,8 @@
                         d! cursor $ update state :hide-input? not
                   when dev? $ comp-reel (>> states :reel) reel $ {}
           :examples $ []
-        'comp-leaf $ %{} 'CodeEntry (:doc |)
+        'comp-leaf $ %{} 'CodeEntry
+          :doc "|递归 Leaf 输入保持具体类型。map-indexed 回调返回值只在 Respo 开放子节点边界使用 Dynamic，因为正式 div API 接收原始 Element/Component，不接受 RenderNode 枚举；不扩大 Leaf 的业务类型。"
           :code $ quote $ defcomp comp-leaf (leaves style level)
             div
               {} $ :style $ merge
@@ -58,21 +64,29 @@
                   :color :white
                 if (> level 0)
                   {} (:margin-left 8) (:margin-bottom 16)
+                  .empty $ {} (:margin-left 8) (:margin-bottom 16)
               , & $ -> leaves $ map-indexed
                 fn (idx line)
-                  if (list? line)
-                    comp-leaf line style $ inc level
-                    div
-                      {} (:class-name |leaf-line) (:tab-index 0)
-                        :style $ {} (:padding-left 6) (:margin-left 2)
-                      if (.blank? line)
-                        div
-                          {} $ :style $ {}
-                            :color $ hsl 0 0 100 0.1
-                            :user-select :none
-                          <> |_
-                        <> line
+                  hint-fn $ {}
+                    :args $ [] 'Number 'app.comp.container/Leaf
+                    :return 'Dynamic
+                  match line
+                    (:branch children)
+                      comp-leaf children style $ inc level
+                    (:line text)
+                      div
+                        {} (:class-name |leaf-line) (:tab-index 0)
+                          :style $ {} (:padding-left 6) (:margin-left 2)
+                        if (.blank? text)
+                          div
+                            {} $ :style $ {}
+                              :color $ hsl 0 0 100 0.1
+                              :user-select :none
+                            <> |_
+                          <> text
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] (:: 'List 'app.comp.container/Leaf) 'Nil 'Number
         'effect-text $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defeffect effect-text () (action el a)
             case-default action nil
@@ -84,8 +98,11 @@
           :examples $ []
         'pack-buffer $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn pack-buffer (acc buffer)
-            if (empty? buffer) acc $ conj acc $ parse-leaves buffer
+            if (empty? buffer) acc $ .append acc $ Leaf :branch (parse-leaves buffer)
           :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'List 'app.comp.container/Leaf) (:: 'List 'String)
+            :return $ :: 'List 'app.comp.container/Leaf
         'parse-leaves $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn parse-leaves (lines0)
             apply-args
@@ -93,9 +110,12 @@
                 []
                 , false false lines0
               fn (acc buffer indented? gap? lines)
+                hint-fn $ {}
+                  :args $ [] (:: 'List 'app.comp.container/Leaf) (:: 'List 'String) 'Bool 'Bool $ :: 'List 'String
+                  :return $ :: 'List 'app.comp.container/Leaf
                 if (empty? lines) (pack-buffer acc buffer)
                   let
-                      l0 $ first lines
+                      l0 $ .unwrap $ first lines
                     if (.blank? l0)
                       if indented?
                         recur acc (conj buffer l0) true false $ rest lines
@@ -106,8 +126,8 @@
                             conj buffer $ .strip-prefix l0 indentation
                             , true false $ rest lines
                           recur
-                            conj (pack-buffer acc buffer) l0
-                            []
+                            conj (pack-buffer acc buffer) (Leaf :line l0)
+                            .empty buffer
                             , false false $ rest lines
                         if (.starts-with? l0 indentation)
                           recur acc
@@ -115,17 +135,39 @@
                             , true false $ rest lines
                           recur
                             conj
-                              if gap? (conj acc &newline) acc
-                              , l0
-                            []
+                              if gap?
+                                conj acc $ Leaf :line &newline
+                                , acc
+                              Leaf :line l0
+                            .empty buffer
                             , false false $ rest lines
           :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] $ :: 'List 'String
+            :return $ :: 'List 'app.comp.container/Leaf
+          :tests $ [] $ %{} 'TestEntry (:name |legacy-layout)
+            :code $ quote $ do
+              assert= ([])
+                parse-leaves $ []
+              assert=
+                [] (Leaf :line |one) (Leaf :line |two)
+                parse-leaves $ [] |one |two
+              assert=
+                [] (Leaf :line |one) (Leaf :line &newline) (Leaf :line |two)
+                parse-leaves $ [] |one | |two
+              assert=
+                [] (Leaf :line |one)
+                  Leaf :branch $ [] (Leaf :line |two)
+                    Leaf :branch $ [] $ Leaf :line |three
+                  Leaf :line |four
+                parse-leaves $ [] |one "|  two" "|    three" | |four
+              , &unit
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.container
           :require
             respo.util.format :refer $ hsl
             respo-ui.core :as ui
-            respo.core :refer $ defcomp defeffect <> >> div button textarea span input defeffect a
+            respo.core :refer $ defcomp defeffect <> >> div button textarea span input a
             respo.comp.space :refer $ =<
             reel.comp.reel :refer $ comp-reel
             app.config :refer $ dev?
