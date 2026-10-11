@@ -34,54 +34,60 @@
                   .unwrap-or (get states :cursor) ([])
                   :: 'List 'Dynamic
                 state $ schema/decode-draft $ .unwrap-or (get states :data) nil
-              [] (effect-text)
+              div
+                {} $ :style $ merge ui/global ui/fullscreen ui/row
                 div
-                  {} $ :style $ merge ui/global ui/fullscreen ui/row
-                  div
-                    {} $ :style ui/expand
-                    comp-leaf
-                      parse-leaves $ .map
-                        .split-lines $ :draft state
-                        fn (x) (trim-line x)
-                      , nil 0
-                  =< 8 nil
-                  if
-                    not $ :hide-input? state
-                    textarea $ {}
-                      :value $ :draft state
-                      :class-name |draft
-                      :placeholder |Content
-                      :style $ merge ui/expand ui/textarea $ {} (:font-family ui/font-code)
-                      :on-input $ fn (e d!)
-                        hint-fn $ {}
-                          :args $ [] (:: 'Map 'Tag 'Dynamic)
-                            :: 'Fn $ {}
-                              :args $ [] 'Dynamic
-                              :rest 'Dynamic
-                              :return 'Unit
-                          :return 'Unit
-                        d! $ schema/Op :states cursor $ struct-with state
-                          :draft $ decode-map-as
-                            .unwrap $ get e :value
-                            , 'String
-                  div ({})
-                    a $ {}
-                      :style $ merge ui/link $ {} (:position :absolute) (:right 8) (:bottom 8)
-                      :inner-text |View
-                      :on-click $ fn (e d!)
-                        hint-fn $ {}
-                          :args $ [] (:: 'Map 'Tag 'Dynamic)
-                            :: 'Fn $ {}
-                              :args $ [] 'Dynamic
-                              :rest 'Dynamic
-                              :return 'Unit
-                          :return 'Unit
-                        d! $ schema/Op :states cursor $ struct-with state
-                          :hide-input? $ not $ :hide-input? state
-                  when dev? $ comp-typed-reel (>> states :reel) reel $ {}
+                  {} $ :style ui/expand
+                  comp-leaf
+                    parse-leaves $ .map
+                      .split-lines $ :draft state
+                      fn (x) (trim-line x)
+                    , nil 0
+                =< 8 nil
+                if
+                  not $ :hide-input? state
+                  comp-editor state cursor
+                div ({})
+                  a $ {}
+                    :style $ merge ui/link $ {} (:position :absolute) (:right 8) (:bottom 8)
+                    :inner-text |View
+                    :on-click $ fn (e d!)
+                      hint-fn $ {}
+                        :args $ [] (:: 'Map 'Tag 'Dynamic)
+                          :: 'Fn $ {}
+                            :args $ [] 'Dynamic
+                            :rest 'Dynamic
+                            :return 'Unit
+                        :return 'Unit
+                      d! $ schema/Op :states cursor $ struct-with state
+                        :hide-input? $ not $ :hide-input? state
+                when dev? $ comp-typed-reel (>> states :reel) reel $ {}
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
             :args $ [] $ :: 'reel.typed/State 'app.schema/Op 'app.schema/Store
+        'comp-editor $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defcomp comp-editor (state cursor)
+            [] (effect-text)
+              textarea $ {}
+                :value $ :draft state
+                :class-name |draft
+                :placeholder |Content
+                :style $ merge ui/expand ui/textarea $ {} (:font-family ui/font-code)
+                :on-input $ fn (e d!)
+                  hint-fn $ {}
+                    :args $ [] (:: 'Map 'Tag 'Dynamic)
+                      :: 'Fn $ {}
+                        :args $ [] 'Dynamic
+                        :rest 'Dynamic
+                        :return 'Unit
+                    :return 'Unit
+                  d! $ schema/Op :states cursor $ struct-with state
+                    :draft $ decode-map-as
+                      .unwrap $ get e :value
+                      , 'String
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] 'app.schema/Draft $ :: 'List 'Dynamic
         'comp-leaf $ %{} 'CodeEntry
           :doc "|递归 Leaf 输入保持具体类型。map-indexed 回调返回值只在 Respo 开放子节点边界使用 Dynamic，因为正式 div API 接收原始 Element/Component，不接受 RenderNode 枚举；不扩大 Leaf 的业务类型。"
           :code $ quote $ defcomp comp-leaf (leaves style level)
