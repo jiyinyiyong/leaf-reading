@@ -15,6 +15,16 @@
             :branch $ :: 'List 'app.comp.container/Leaf
           :examples $ []
           :schema $ :: 'EnumDef
+        'codearea-lifecycle! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn codearea-lifecycle! (mount?) (raise "|codearea requires the browser JavaScript target")
+          :examples $ []
+          :ffi $ {} (:target :browser)
+            :js $ {}
+              :inline "|(mount) => { const element = document.querySelector(\".draft\"); if (mount) { codearea.codearea(element); } else { codearea.teardownCodearea(element); } }"
+              :modules $ {} $ :codearea |@mvc-works/codearea
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Bool
+            :features $ #{} :js-ffi
         'comp-container $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-container (reel)
             let
@@ -89,10 +99,13 @@
             :args $ [] (:: 'List 'app.comp.container/Leaf) 'Nil 'Number
         'effect-text $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defeffect effect-text () (action el a)
-            case-default action nil
-              :mount $ -> (js/document.querySelector |.draft) (codearea)
-              :unmount $ -> (js/document.querySelector |.draft) (teardownCodearea)
+            match (decode-map-as action 'Tag)
+              :mount $ codearea-lifecycle! true
+              :unmount $ codearea-lifecycle! false
+              _ &unit
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Effect)
+            :args $ []
         'indentation $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def indentation "|  "
           :examples $ []
@@ -171,17 +184,20 @@
             respo.comp.space :refer $ =<
             reel.comp.reel :refer $ comp-reel
             app.config :refer $ dev?
-            |@mvc-works/codearea :refer $ codearea teardownCodearea
     'app.config $ %{} 'FileEntry
       :defs $ {}
+        'Site $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defstruct Site (:storage-key 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
         'dev? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def dev?
             = |dev $ .unwrap-or (get-env |mode) |release
           :examples $ []
         'site $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ def site
-            {} $ :storage-key |workflow
+          :code $ quote $ def site (Site :storage-key |workflow)
           :examples $ []
+          :schema $ :: 'app.config/Site
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.config
     'app.main $ %{} 'FileEntry
@@ -212,13 +228,27 @@
             println "|App started."
           :examples $ []
         'mount-target $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ def mount-target (.!querySelector js/document |.app)
+          :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
+          :schema $ :: 'JsNullish 'respo.dom/DomElement
         'persist-storage! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-storage! ()
-            .!setItem js/localStorage (:storage-key config/site)
-              format-cirru-edn $ :store @*reel
+            .set-item! (host/window-local-storage) (:storage-key config/site)
+              format-cirru-edn $ .unwrap $ get @*reel :store
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+            :features $ #{} :js-ffi
+        'query-mount-target $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn query-mount-target ()
+            let
+                document $ js-cast js/document 'respo.dom/DomDocument
+              document .query-selector |.app
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ []
+            :features $ #{} :js-ffi
+            :return $ :: 'JsNullish 'respo.dom/DomElement
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (remove-watch *reel :changes) (clear-cache!)
             add-watch *reel :changes $ fn (reel prev) (render-app!)
@@ -246,6 +276,7 @@
             reel.core :refer $ reel-updater refresh-reel
             reel.schema :as reel-schema
             app.config :as config
+            js-ffi.browser :as host
     'app.schema $ %{} 'FileEntry
       :defs $ {} $ 'store
         %{} 'CodeEntry (:doc |)
