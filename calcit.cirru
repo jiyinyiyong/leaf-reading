@@ -30,9 +30,10 @@
             let
                 store $ :store reel
                 states $ :states store
-                cursor $ either (:cursor states) ([])
-                state $ either (:data states)
-                  {} (:draft |) (:hide-input? false)
+                cursor $ decode-map-as
+                  .unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
+                state $ schema/decode-draft $ .unwrap-or (get states :data) nil
               [] (effect-text)
                 div
                   {} $ :style $ merge ui/global ui/fullscreen ui/row
@@ -41,7 +42,7 @@
                     comp-leaf
                       parse-leaves $ .map
                         .split-lines $ :draft state
-                        fn (x) (.!trimRight x)
+                        fn (x) (trim-line x)
                       , nil 0
                   =< 8 nil
                   if
@@ -52,15 +53,35 @@
                       :placeholder |Content
                       :style $ merge ui/expand ui/textarea $ {} (:font-family ui/font-code)
                       :on-input $ fn (e d!)
-                        d! cursor $ assoc state :draft $ :value e
+                        hint-fn $ {}
+                          :args $ [] (:: 'Map 'Tag 'Dynamic)
+                            :: 'Fn $ {}
+                              :args $ [] 'Dynamic
+                              :rest 'Dynamic
+                              :return 'Unit
+                          :return 'Unit
+                        d! $ schema/Op :states cursor $ struct-with state
+                          :draft $ decode-map-as
+                            .unwrap $ get e :value
+                            , 'String
                   div ({})
                     a $ {}
                       :style $ merge ui/link $ {} (:position :absolute) (:right 8) (:bottom 8)
                       :inner-text |View
                       :on-click $ fn (e d!)
-                        d! cursor $ update state :hide-input? not
-                  when dev? $ comp-reel (>> states :reel) reel $ {}
+                        hint-fn $ {}
+                          :args $ [] (:: 'Map 'Tag 'Dynamic)
+                            :: 'Fn $ {}
+                              :args $ [] 'Dynamic
+                              :rest 'Dynamic
+                              :return 'Unit
+                          :return 'Unit
+                        d! $ schema/Op :states cursor $ struct-with state
+                          :hide-input? $ not $ :hide-input? state
+                  when dev? $ comp-typed-reel (>> states :reel) reel $ {}
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] $ :: 'reel.typed/State 'app.schema/Op 'app.schema/Store
         'comp-leaf $ %{} 'CodeEntry
           :doc "|递归 Leaf 输入保持具体类型。map-indexed 回调返回值只在 Respo 开放子节点边界使用 Dynamic，因为正式 div API 接收原始 Element/Component，不接受 RenderNode 枚举；不扩大 Leaf 的业务类型。"
           :code $ quote $ defcomp comp-leaf (leaves style level)
@@ -118,42 +139,43 @@
             :return $ :: 'List 'app.comp.container/Leaf
         'parse-leaves $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn parse-leaves (lines0)
-            apply-args
-                []
-                []
-                , false false lines0
-              fn (acc buffer indented? gap? lines)
-                hint-fn $ {}
-                  :args $ [] (:: 'List 'app.comp.container/Leaf) (:: 'List 'String) 'Bool 'Bool $ :: 'List 'String
-                  :return $ :: 'List 'app.comp.container/Leaf
-                if (empty? lines) (pack-buffer acc buffer)
-                  let
-                      l0 $ .unwrap $ first lines
-                    if (.blank? l0)
-                      if indented?
-                        recur acc (conj buffer l0) true false $ rest lines
-                        recur acc buffer false true $ rest lines
-                      if indented?
-                        if (.starts-with? l0 indentation)
-                          recur acc
-                            conj buffer $ .strip-prefix l0 indentation
-                            , true false $ rest lines
-                          recur
-                            conj (pack-buffer acc buffer) (Leaf :line l0)
-                            .empty buffer
-                            , false false $ rest lines
-                        if (.starts-with? l0 indentation)
-                          recur acc
-                            conj buffer $ .strip-prefix l0 indentation
-                            , true false $ rest lines
-                          recur
-                            conj
-                              if gap?
-                                conj acc $ Leaf :line &newline
-                                , acc
-                              Leaf :line l0
-                            .empty buffer
-                            , false false $ rest lines
+            loop
+                acc $ []
+                buffer $ []
+                indented? false
+                gap? false
+                lines lines0
+              hint-fn $ {}
+                :args $ [] (:: 'List 'app.comp.container/Leaf) (:: 'List 'String) 'Bool 'Bool $ :: 'List 'String
+                :return $ :: 'List 'app.comp.container/Leaf
+              if (empty? lines) (pack-buffer acc buffer)
+                let
+                    l0 $ .unwrap $ first lines
+                  if (.blank? l0)
+                    if indented?
+                      recur acc (conj buffer l0) true false $ rest lines
+                      recur acc buffer false true $ rest lines
+                    if indented?
+                      if (.starts-with? l0 indentation)
+                        recur acc
+                          conj buffer $ .strip-prefix l0 indentation
+                          , true false $ rest lines
+                        recur
+                          conj (pack-buffer acc buffer) (Leaf :line l0)
+                          .empty buffer
+                          , false false $ rest lines
+                      if (.starts-with? l0 indentation)
+                        recur acc
+                          conj buffer $ .strip-prefix l0 indentation
+                          , true false $ rest lines
+                        recur
+                          conj
+                            if gap?
+                              conj acc $ Leaf :line &newline
+                              , acc
+                            Leaf :line l0
+                          .empty buffer
+                          , false false $ rest lines
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] $ :: 'List 'String
@@ -175,6 +197,15 @@
                   Leaf :line |four
                 parse-leaves $ [] |one "|  two" "|    three" | |four
               , &unit
+        'trim-line $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn trim-line (text)
+            raise "|trim-line requires the browser JavaScript target"
+          :examples $ []
+          :ffi $ {} (:target :browser)
+            :js $ {} $ :inline "|(text) => text.trimEnd()"
+          :schema $ :: 'Fn $ {} (:return 'String)
+            :args $ [] 'String
+            :features $ #{} :js-ffi
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.container
           :require
@@ -182,8 +213,9 @@
             respo-ui.core :as ui
             respo.core :refer $ defcomp defeffect <> >> div button textarea span input a
             respo.comp.space :refer $ =<
-            reel.comp.reel :refer $ comp-reel
             app.config :refer $ dev?
+            app.schema :as schema
+            reel.comp.reel :refer $ comp-typed-reel
     'app.config $ %{} 'FileEntry
       :defs $ {}
         'Site $ %{} 'CodeEntry (:doc |)
@@ -203,30 +235,59 @@
     'app.main $ %{} 'FileEntry
       :defs $ {}
         '*reel $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *reel
-            -> reel-schema/reel (assoc :base schema/store) (assoc :store schema/store)
+          :code $ quote $ defref *reel (typed/new-reel schema/store)
           :examples $ []
+          :schema $ :: 'Ref $ :: 'reel.typed/State 'app.schema/Op 'app.schema/Store
         'dispatch! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn dispatch! (op op-data)
-            when
-              and config/dev? $ not= op :states
-              println |Dispatch: op
-            reset! *reel $ reel-updater updater @*reel op op-data
+          :code $ quote $ defn dispatch! (value)
+            if (enum? value)
+              match (typed/decode-control value)
+                (:some control)
+                  do
+                    reset! *reel $ typed/apply-control updater @*reel control
+                    , &unit
+                (:none)
+                  dispatch-op! $ decode-map-as value 'app.schema/Op
+              raise "|Expected an operation enum"
+            , &unit
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Dynamic
+        'dispatch-op! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn dispatch-op! (op)
+            when config/dev? $ println |Dispatch: op
+            reset! *reel $ typed/record-op updater @*reel op (generate-id!) (shared/now-ms)
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Op
         'main! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn main! () (load-console-formatter!)
             println "|Running mode:" $ if config/dev? |dev |release
             render-app!
-            add-watch *reel :changes $ fn (reel prev) (render-app!)
-            listen-devtools! |k dispatch!
-            .!addEventListener js/window |beforeunload $ fn (event) (persist-storage!)
+            watch-reel!
+            listen-devtools! |k $ fn (op)
+              hint-fn $ {}
+                :args $ [] 'Enum
+                :return 'Unit
+              dispatch! op
+            host/add-event-listener! |beforeunload $ fn (event)
+              hint-fn $ {}
+                :args $ [] 'js-ffi.browser/EventHost
+                :return 'Unit
+              persist-storage!
             repeat! 60 persist-storage!
-            let
-                raw $ .!getItem js/localStorage $ :storage-key config/site
-              when (some? raw)
-                dispatch! :hydrate-storage $ parse-cirru-edn raw
+            match
+              js-nullish->option $ .get-item (host/window-local-storage) (:storage-key config/site)
+              (:none) &unit
+              (:some raw)
+                dispatch-op! $ schema/Op :hydrate-storage $ schema/decode-store (parse-cirru-edn raw)
             println "|App started."
+            , &unit
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+            :features $ #{} :js-ffi
         'mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
@@ -234,7 +295,7 @@
         'persist-storage! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-storage! ()
             .set-item! (host/window-local-storage) (:storage-key config/site)
-              format-cirru-edn $ .unwrap $ get @*reel :store
+              format-cirru-edn $ schema/store-wire $ :store @*reel
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -250,14 +311,21 @@
             :features $ #{} :js-ffi
             :return $ :: 'JsNullish 'respo.dom/DomElement
         'reload! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn reload! () (remove-watch *reel :changes) (clear-cache!)
-            add-watch *reel :changes $ fn (reel prev) (render-app!)
-            reset! *reel $ refresh-reel @*reel schema/store updater
+          :code $ quote $ defn reload! () (remove-watch! *reel :changes) (clear-cache!) (watch-reel!)
+            reset! *reel $ typed/refresh updater @*reel schema/store
+            , &unit
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+            :features $ #{} :js-ffi
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
             render! mount-target (comp-container @*reel) dispatch!
+            , &unit
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+            :features $ #{} :js-ffi
         'repeat! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn repeat! (duration cb)
             host/set-interval! cb $ * 1000 duration
@@ -267,6 +335,18 @@
             :args $ [] 'Number $ :: 'Fn
               {} (:return 'Unit)
                 :args $ []
+        'watch-reel! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn watch-reel! ()
+            add-watch! *reel :changes $ fn (reel prev)
+              hint-fn $ {}
+                :args $ [] (:: 'reel.typed/State 'app.schema/Op 'app.schema/Store) (:: 'reel.typed/State 'app.schema/Op 'app.schema/Store)
+                :return 'Unit
+              render-app!
+              , &unit
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.main
           :require
@@ -275,10 +355,10 @@
             app.updater :refer $ updater
             app.schema :as schema
             reel.util :refer $ listen-devtools!
-            reel.core :refer $ reel-updater refresh-reel
-            reel.schema :as reel-schema
+            reel.typed :as typed
             app.config :as config
             js-ffi.browser :as host
+            js-ffi.shared :as shared
     'app.schema $ %{} 'FileEntry
       :defs $ {}
         'Draft $ %{} 'CodeEntry (:doc |)
@@ -348,6 +428,18 @@
             Store :states $ {} $ :cursor ([])
           :examples $ []
           :schema $ :: 'app.schema/Store
+        'store-wire $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn store-wire (store)
+            let
+                states $ :states store
+              {} $ :states $ match (get states :data)
+                (:none) states
+                (:some draft)
+                  assoc states :data $ .to-map $ decode-draft draft
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Store
+            :return $ :: 'Map 'Tag 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
     'app.updater $ %{} 'FileEntry
