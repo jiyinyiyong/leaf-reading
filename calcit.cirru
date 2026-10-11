@@ -280,23 +280,104 @@
             app.config :as config
             js-ffi.browser :as host
     'app.schema $ %{} 'FileEntry
-      :defs $ {} $ 'store
-        %{} 'CodeEntry (:doc |)
-          :code $ quote $ def store
-            {} $ :states $ {}
-              :cursor $ []
+      :defs $ {}
+        'Draft $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defstruct Draft (:draft 'String) (:hide-input? 'Bool)
           :examples $ []
+          :schema $ :: 'StructDef
+        'Op $ %{} 'CodeEntry
+          :doc "|States is the heterogeneous Respo/Reel UI-state protocol, not an untyped business operation. The reducer validates the root Draft through decode-store; hydration accepts only decoded Store."
+          :code $ quote $ defenum Op
+            :states (:: 'List 'Dynamic) 'Dynamic
+            :hydrate-storage 'app.schema/Store
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'Store $ %{} 'CodeEntry
+          :doc "|The shared Respo/Reel UI state tree has heterogeneous cursor keys and values. Keep that protocol map open while decoding the application's Draft fields concretely."
+          :code $ quote $ defstruct Store
+            :states $ :: 'Map 'Dynamic 'Dynamic
+          :examples $ []
+          :schema $ :: 'StructDef
+        'decode-draft $ %{} 'CodeEntry
+          :doc "|Validate legacy saved draft maps and current Draft fields at the open UI-state boundary; only missing local state defaults. Business draft and visibility remain concrete."
+          :code $ quote $ defn decode-draft (raw)
+            if (nil? raw) default-draft $ decode-map-as
+              if (struct? raw) (.to-map raw) raw
+              , 'app.schema/Draft
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Draft)
+            :args $ [] 'Dynamic
+        'decode-store $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-store (raw)
+            let
+                base $ decode-map-as
+                  if (struct? raw) (.to-map raw) raw
+                  , 'app.schema/Store
+                states $ :states base
+              struct-with base $ :states $ match (get states :data)
+                (:none) states
+                (:some draft)
+                  assoc states :data $ decode-draft draft
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Store)
+            :args $ [] 'Dynamic
+          :tests $ [] $ %{} 'TestEntry (:name |legacy-draft-preservation)
+            :code $ quote $ let
+                raw $ {} $ :states
+                  {}
+                    :cursor $ []
+                    :data $ {} (:draft "|one\n  two") (:hide-input? true)
+                    :reel $ {} $ :data 2
+                restored $ decode-store raw
+                draft $ decode-draft $ .unwrap
+                  get (:states restored) :data
+              assert= "|one\n  two" $ :draft draft
+              assert= true $ :hide-input? draft
+              assert=
+                {} $ :data 2
+                .unwrap $ get (:states restored) :reel
+              assert= restored $ decode-store restored
+              assert= default-draft $ decode-draft nil
+              , &unit
+        'default-draft $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ def default-draft (Draft :draft | :hide-input? false)
+          :examples $ []
+          :schema $ :: 'app.schema/Draft
+        'store $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ def store
+            Store :states $ {} $ :cursor ([])
+          :examples $ []
+          :schema $ :: 'app.schema/Store
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
     'app.updater $ %{} 'FileEntry
       :defs $ {} $ 'updater
         %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn updater (store op data op-id op-time)
-            case op
-              :states $ update-states store data
-              :hydrate-storage data
-              op store
+          :code $ quote $ defn updater (store op op-id op-time)
+            match op
+              (:states cursor state)
+                schema/decode-store $ struct-with store $ :states
+                  decode-map-as
+                    update-state-tree (:states store) cursor state
+                    :: 'Map 'Dynamic 'Dynamic
+              (:hydrate-storage saved) saved
           :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Store)
+            :args $ [] 'app.schema/Store 'app.schema/Op 'String 'Number
+          :tests $ [] $ %{} 'TestEntry (:name |root-and-reel-state)
+            :code $ quote $ let
+                edited $ updater schema/store
+                  schema/Op :states ([]) (schema/Draft :draft |hello :hide-input? false)
+                  , |op-1 0
+                debugged $ updater edited
+                  schema/Op :states ([] :reel 1)
+                    {} $ :expanded? true
+                  , |op-2 1
+              assert= |hello $ :draft $ schema/decode-draft
+                .unwrap $ get (:states debugged) :data
+              assert= debugged $ updater schema/store (schema/Op :hydrate-storage debugged) |op-3 2
+              , &unit
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.updater
-          :require $ respo.cursor :refer $ update-states
+          :require (app.schema :as schema)
+            respo.cursor :refer $ update-state-tree
