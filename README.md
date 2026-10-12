@@ -8,9 +8,10 @@ Demo http://repo.tiye.me/tiye/leaf-reading/ .
 
 ### Development
 
-Use Calcit 0.29.0, Node 24 and Yarn 4.12.0. `calcit.cirru` is the canonical
+Use Calcit 0.29.1, Node 24 and Yarn 4.12.0. `calcit.cirru` is the canonical
 source; `deps.cirru` pins the compiler and published module releases.
 The retired `compact.cirru` is no longer used or tracked.
+Formal modules are Respo 0.16.116, UI 0.7.35, Reel 0.6.35 and js-ffi 0.2.1.
 
 ```sh
 caps --strict --ci
