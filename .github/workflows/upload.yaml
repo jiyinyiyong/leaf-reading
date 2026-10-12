@@ -1,4 +1,4 @@
-name: Upload
+name: Validate and upload
 
 on:
   push:
@@ -6,41 +6,74 @@ on:
       - main
   pull_request: {}
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      with:
+        persist-credentials: false
 
-    - name: ACTIONS_ALLOW_UNSECURE_COMMANDS
-      id: ACTIONS_ALLOW_UNSECURE_COMMANDS
-      run: echo 'ACTIONS_ALLOW_UNSECURE_COMMANDS=true' >> $GITHUB_ENV
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: 24
 
-    - name: add cr
+    - name: Enable Corepack
       run: |
-        mkdir -p $GITHUB_WORKSPACE/bin
-        wget -O $GITHUB_WORKSPACE/bin/cr https://github.com/calcit-lang/calcit/releases/download/0.6.1/cr
-        chmod +x $GITHUB_WORKSPACE/bin/cr
-        echo "::add-path::$GITHUB_WORKSPACE/bin"
+        corepack enable
+        corepack prepare yarn@4.12.0 --activate
 
-    - name: "prepare modules"
-      run: >
-        mkdir -p ~/.config/calcit/modules/ && cd ~/.config/calcit/modules/
-        && git clone https://github.com/calcit-lang/lilac.git
-        && git clone https://github.com/calcit-lang/memof.git
-        && git clone https://github.com/Respo/respo.calcit.git
-        && git clone https://github.com/Respo/reel.calcit.git
-        && git clone https://github.com/Respo/respo-markdown.calcit.git
-        && git clone https://github.com/Respo/respo-ui.calcit.git
+    - uses: calcit-lang/setup-calcit@ca701be5a471759e442aa053cd100720bbe1f09f # v1.5.0
+      with:
+        tools: calcit,caps
+        version: 0.29.0
+        caps-version: 0.1.1
 
-    - name: "compiles to js"
-      run: >
-        cr --emit-js --once
-        && yarn && yarn vite build --base=./
+    - name: Install dependencies
+      run: |
+        caps --strict --ci
+        yarn install --immutable
+        caps verify --toolchain
+
+    - name: Check source and attached tests
+      run: |
+        calcit edit format
+        git diff --exit-code -- calcit.cirru
+        calcit --check-only --all-defs
+        calcit test --require-match
+        calcit analyze weak-types --only deprecated-call --summary-only --format json | jq -e '.data.summary.calls == 0'
+
+    - name: Build frontend with CDN paths
+      id: assets
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        if [ "$GITHUB_EVENT_NAME" = pull_request ]; then prefix="${GITHUB_REPOSITORY}/pr/${PR_NUMBER}/"; else prefix="${GITHUB_REPOSITORY}/"; fi
+        base_url="https://cos-sh.tiye.me/${prefix}"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "base-url=$base_url" >> "$GITHUB_OUTPUT"
+        VITE_BASE_URL="$base_url" yarn build
+
+    - name: Upload frontend to COS and verify public files
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: worktools/cos-upload-action@06d6027dcca6413c5936e04a9b6e9f0d5ef71ba0 # v1.2.0
+      with:
+        source-dir: dist
+        bucket: ${{ secrets.COS_BUCKET }}
+        region: ap-shanghai
+        prefix: ${{ steps.assets.outputs.prefix }}
+        public-base-url: ${{ steps.assets.outputs.base-url }}
+        secret-id: ${{ secrets.COS_SECRET_ID }}
+        secret-key: ${{ secrets.COS_SECRET_KEY }}
+        verify-attempts: 6
 
     - name: Deploy to server
-      id: deploy
-      uses: Pendect/action-rsyncer@v1.1.0
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: Pendect/action-rsyncer@8e05ffa5c93e5d9c9b167796b26044d2c616b2b9 # v2.0.0
       env:
         DEPLOY_KEY: ${{secrets.rsync_private_key}}
       with:
@@ -49,6 +82,3 @@ jobs:
         ssh_options: ''
         src: 'dist/*'
         dest: 'rsync-user@tiye.me:/web-assets/repo/${{ github.repository }}'
-
-    - name: Display status from deploy
-      run: echo "${{ steps.deploy.outputs.status }}"

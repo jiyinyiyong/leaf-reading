@@ -5,3 +5,9 @@
 js-out/
 node_modules/
 dist/
+
+.calcit/
+.yarn/
+.pnp.cjs
+.pnp.loader.mjs
+.DS_Store
