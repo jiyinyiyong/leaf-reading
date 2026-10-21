@@ -42,7 +42,7 @@
                     parse-leaves $ .map
                       .split-lines $ :draft state
                       fn (x) (trim-line x)
-                    , nil 0
+                    , 0
                 =< 8 nil
                 if
                   not $ :hide-input? state
@@ -90,7 +90,7 @@
             :args $ [] 'app.schema/Draft $ :: 'List 'Dynamic
         'comp-leaf $ %{} 'CodeEntry
           :doc "|递归 Leaf 输入保持具体类型。map-indexed 回调返回值只在 Respo 开放子节点边界使用 Dynamic，因为正式 div API 接收原始 Element/Component，不接受 RenderNode 枚举；不扩大 Leaf 的业务类型。"
-          :code $ quote $ defcomp comp-leaf (leaves style level)
+          :code $ quote $ defcomp comp-leaf (leaves level)
             div
               {} $ :style $ merge
                 {}
@@ -109,7 +109,7 @@
                     :return 'Dynamic
                   match line
                     (:branch children)
-                      comp-leaf children style $ inc level
+                      comp-leaf children $ inc level
                     (:line text)
                       div
                         {} (:class-name |leaf-line) (:tab-index 0)
@@ -123,7 +123,7 @@
                           <> text
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'List 'app.comp.container/Leaf) 'Nil 'Number
+            :args $ [] (:: 'List 'app.comp.container/Leaf) 'Number
         'effect-text $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defeffect effect-text () (action el a)
             match (decode-map-as action 'Tag)
@@ -136,6 +136,7 @@
         'indentation $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def indentation "|  "
           :examples $ []
+          :schema $ :: 'String
         'pack-buffer $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn pack-buffer (acc buffer)
             if (empty? buffer) acc $ .append acc $ Leaf :branch (parse-leaves buffer)
@@ -232,6 +233,7 @@
           :code $ quote $ def dev?
             = |dev $ .unwrap-or (get-env |mode) |release
           :examples $ []
+          :schema $ :: 'Bool
         'site $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def site (Site :storage-key |workflow)
           :examples $ []
@@ -445,7 +447,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'app.schema/Store
-            :return $ :: 'Map 'Tag 'Dynamic
+            :return $ :: 'Map 'Tag $ :: 'Map 'Dynamic 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
     'app.updater $ %{} 'FileEntry

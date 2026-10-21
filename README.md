@@ -6,18 +6,25 @@ Some refinements to reading on a screen.
 
 Demo http://repo.tiye.me/tiye/leaf-reading/ .
 
+### 使用者需要注意
+
+迁移候选将 CLI 与 `@calcit/procs` 配对升级到正式 0.30.1，使用 Node 24、Yarn 4.18.0。存档 key `workflow`、旧 Map 格式、文本内容、View 显隐及 60 秒自动保存保持不变；不清空已有草稿。本轮不合并、发版或部署。
+
+内部 `comp-leaf` 删除从不参与样式计算、只递归传递 nil 的参数，改为 `(leaves level)`。调用此应用内部辅助组件的代码需要同步重编译；层级解析、缩进和页面布局不变。`indentation` / `dev?` 声明为真实 String / Bool，存档外层类型收紧为 `Map<Tag, Map<Dynamic,Dynamic>>`；异构状态树仍如实保留开放类型，不增加强转或预算。
+
 ### Development
 
-Use Calcit 0.29.1, Node 24 and Yarn 4.12.0. `calcit.cirru` is the canonical
+Use Calcit 0.30.1, Node 24 and Yarn 4.18.0. `calcit.cirru` is the canonical
 source; `deps.cirru` pins the compiler and published module releases.
 The retired `compact.cirru` is no longer used or tracked.
-Formal modules are Respo 0.16.116, UI 0.7.35, Reel 0.6.35 and js-ffi 0.2.1.
+Formal modules are Respo 0.16.122, UI 0.7.41, Reel 0.6.39 and js-ffi 0.2.3.
 
 ```sh
 caps --strict --ci
 yarn install --immutable
 caps verify --toolchain
 calcit --check-only --all-defs
+calcit fix --workflow strict --verify
 calcit test --require-match
 yarn dev
 ```
@@ -28,6 +35,10 @@ generates JavaScript and builds the frontend without an extra process runner.
 The existing `workflow` localStorage key and saved Map format are retained.
 Legacy saved drafts are decoded into typed String/Bool fields. View toggles
 mount and unmount Codearea with the textarea. Autosave runs every 60 seconds.
+
+原三项定义内业务测试保留，没有新增测试框架或验证脚本。完整 strict 加入现有 CI；正式配对验收以 Linux CI 的精确提交为准。本地中间 0.30.0 配对已通过全定义、完整 strict、原测试和构建，并在独立回环端口用合成文本验证三级层级、View 卸载/重新挂载与刷新恢复；不冒充正式 0.30.1 的浏览器验收。
+
+仍保留真实 UI 子节点、存档及外部事件入口的开放合同；unsafe 为 0 不等于全项目类型闭合。原 native 存档测试中 `.to-map` 的运行时分派提示单独记录，不假称没有任何 warning，也不通过 native-call 替换或额外包装掩盖它。
 
 ### Deployment
 
