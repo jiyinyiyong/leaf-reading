@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@calcit/procs": "0.31.0-alpha.1",
+    "@calcit/procs": "0.31.0-alpha.7",
     "@mvc-works/codearea": "0.0.3"
   },
   "devDependencies": {
