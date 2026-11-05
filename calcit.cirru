@@ -11,8 +11,8 @@
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'Leaf $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defenum Leaf (:line 'String)
-            :branch $ quote $ List app.comp.container/Leaf
+          :code $ quote $ defenum Leaf (:line String)
+            :branch $ List app.comp.container/Leaf
           :examples $ []
           :schema $ quote EnumDef
         'codearea-lifecycle! $ %{} 'CodeEntry (:doc |)
@@ -30,8 +30,10 @@
                 states $ :states store
                 cursor $ decode-map-as
                   .unwrap-or (get states :cursor) ([])
-                  :: 'List 'Dynamic
-                state $ schema/decode-draft $ .unwrap-or (get states :data) nil
+                  List respo.schema/CoordKey
+                state $ match (get states :data)
+                  (:some raw) (schema/decode-draft raw)
+                  (:none) schema/default-draft
               div
                 {} $ :style $ merge ui/global ui/fullscreen ui/row
                 div
@@ -41,21 +43,24 @@
                       .split-lines $ :draft state
                       fn (x) (trim-line x)
                     , 0
-                =< 8 nil
+                space-x 8
                 if
                   not $ :hide-input? state
-                  comp-editor state cursor
+                  Option :some $ comp-editor state cursor
+                  Option :none
                 div ({})
                   a $ {}
                     :style $ merge ui/link $ {} (:position :absolute) (:right 8) (:bottom 8)
                     :inner-text |View
                     :on-click $ fn (e d!)
-                      hint-fn $ Fn (Map Tag Dynamic)
-                        Fn Dynamic & Dynamic $ -> Unit
+                      hint-fn $ Fn respo.schema/RespoEvent
+                        Fn app.schema/Op $ -> Unit
                         -> Unit
                       d! $ schema/Op :states cursor $ struct-with state
                         :hide-input? $ not $ :hide-input? state
-                when dev? $ comp-typed-reel (>> states :reel) reel $ {}
+                if dev?
+                  Option :some $ comp-typed-reel (>> states :reel) reel $ {}
+                  Option :none
           :examples $ []
           :schema $ quote $ Fn (reel.typed/State app.schema/Op app.schema/Store) (-> respo.schema/Component)
         'comp-editor $ %{} 'CodeEntry (:doc |)
@@ -67,15 +72,13 @@
                 :placeholder |Content
                 :style $ merge ui/expand ui/textarea $ {} (:font-family ui/font-code)
                 :on-input $ fn (e d!)
-                  hint-fn $ Fn (Map Tag Dynamic)
-                    Fn Dynamic & Dynamic $ -> Unit
+                  hint-fn $ Fn respo.schema/RespoEvent
+                    Fn app.schema/Op $ -> Unit
                     -> Unit
                   d! $ schema/Op :states cursor $ struct-with state
-                    :draft $ decode-map-as
-                      .unwrap $ get e :value
-                      , 'String
+                    :draft $ decode-map-as (:value e) 'String
           :examples $ []
-          :schema $ quote $ Fn app.schema/Draft (List Dynamic) (-> respo.schema/Component)
+          :schema $ quote $ Fn app.schema/Draft (List respo.schema/CoordKey) (-> respo.schema/Component)
         'comp-leaf $ %{} 'CodeEntry
           :doc "|递归 Leaf 输入保持具体类型。map-indexed 回调返回值只在 Respo 开放子节点边界使用 Dynamic，因为正式 div API 接收原始 Element/Component，不接受 RenderNode 枚举；不扩大 Leaf 的业务类型。"
           :code $ quote $ defcomp comp-leaf (leaves level)
@@ -198,14 +201,14 @@
             respo.util.format :refer $ hsl
             respo-ui.core :as ui
             respo.core :refer $ defcomp defeffect <> >> div button textarea span input a
-            respo.comp.space :refer $ =<
+            respo.comp.space :refer $ space-x
             app.config :refer $ dev?
             app.schema :as schema
             reel.comp.reel :refer $ comp-typed-reel
     'app.config $ %{} 'FileEntry
       :defs $ {}
         'Site $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defstruct Site (:storage-key 'String)
+          :code $ quote $ defstruct Site (:storage-key String)
           :examples $ []
           :schema $ quote StructDef
         'dev? $ %{} 'CodeEntry (:doc |)
@@ -227,18 +230,16 @@
           :schema $ quote $ Ref (reel.typed/State app.schema/Op app.schema/Store)
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch! (value)
-            if (enum? value)
-              match (typed/decode-control value)
-                (:some control)
-                  do
-                    reset! *reel $ typed/apply-control updater @*reel control
-                    , &unit
-                (:none)
-                  dispatch-op! $ decode-map-as value 'app.schema/Op
-              raise "|Expected an operation enum"
+            match (typed/decode-control value)
+              (:some control)
+                do
+                  reset! *reel $ typed/apply-control updater @*reel control
+                  , &unit
+              (:none)
+                dispatch-op! $ decode-map-as value 'app.schema/Op
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Enum (-> Unit)
+          :schema $ quote $ Fn AnyEnum (-> Unit)
         'dispatch-op! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-op! (op)
             when config/dev? $ println |Dispatch: op
@@ -252,7 +253,7 @@
             render-app!
             watch-reel!
             listen-devtools! |k $ fn (op)
-              hint-fn $ Fn Enum $ -> Unit
+              hint-fn $ Fn AnyEnum $ -> Unit
               dispatch! op
             host/add-event-listener! |beforeunload $ fn (event)
               hint-fn $ Fn js-ffi.browser/EventHost $ -> Unit
@@ -330,22 +331,20 @@
     'app.schema $ %{} 'FileEntry
       :defs $ {}
         'Draft $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defstruct Draft (:draft 'String) (:hide-input? 'Bool)
+          :code $ quote $ defstruct Draft (:draft String) (:hide-input? Bool)
           :examples $ []
           :schema $ quote StructDef
         'Op $ %{} 'CodeEntry
           :doc "|States is the heterogeneous Respo/Reel UI-state protocol, not an untyped business operation. The reducer validates the root Draft through decode-store; hydration accepts only decoded Store."
           :code $ quote $ defenum Op
-            :states
-              quote $ List Dynamic
-              , 'Dynamic
-            :hydrate-storage 'app.schema/Store
+            :states (List respo.schema/CoordKey) Dynamic
+            :hydrate-storage app.schema/Store
           :examples $ []
           :schema $ quote EnumDef
         'Store $ %{} 'CodeEntry
           :doc "|The shared Respo/Reel UI state tree has heterogeneous cursor keys and values. Keep that protocol map open while decoding the application's Draft fields concretely."
           :code $ quote $ defstruct Store
-            :states $ quote $ Map Dynamic Dynamic
+            :states $ Map Dynamic Dynamic
           :examples $ []
           :schema $ quote StructDef
         'decode-draft $ %{} 'CodeEntry
@@ -418,7 +417,7 @@
                 schema/decode-store $ struct-with store $ :states
                   decode-map-as
                     update-state-tree (:states store) cursor state
-                    :: 'Map 'Dynamic 'Dynamic
+                    Map Dynamic Dynamic
               (:hydrate-storage saved) saved
           :examples $ []
           :schema $ quote $ Fn app.schema/Store app.schema/Op String Number (-> app.schema/Store)
