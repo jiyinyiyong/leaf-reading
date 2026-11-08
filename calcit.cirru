@@ -6,7 +6,7 @@
     {} (:description |) (:init-fn 'app.main/main!) (:mode :js) (:reload-fn 'app.main/reload!) (:target :browser)
       :feature-policy $ {}
       :modules $ [] |respo.calcit/ |respo-ui.calcit/ |reel.calcit/
-      :type-slots $ {} $ :dispatch-op |app.schema/Op
+      :type-slots $ {} $ :dispatch-op 'app.schema/Op
   :files $ {}
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
@@ -15,6 +15,10 @@
             :branch $ List app.comp.container/Leaf
           :examples $ []
           :schema $ quote EnumDef
+        'LeafChild $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defunion LeafChild respo.schema/Element respo.schema/Component
+          :examples $ []
+          :schema $ quote UnionDef
         'codearea-lifecycle! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn codearea-lifecycle! (mount?) (raise "|codearea requires the browser JavaScript target")
           :examples $ []
@@ -56,7 +60,7 @@
                       hint-fn $ Fn respo.schema/RespoEvent
                         Fn app.schema/Op $ -> Unit
                         -> Unit
-                      d! $ schema/Op :states cursor $ struct-with state
+                      d! $ schema/Op :draft cursor $ struct-with state
                         :hide-input? $ not $ :hide-input? state
                 if dev?
                   Option :some $ comp-typed-reel (>> states :reel) reel $ {}
@@ -75,12 +79,11 @@
                   hint-fn $ Fn respo.schema/RespoEvent
                     Fn app.schema/Op $ -> Unit
                     -> Unit
-                  d! $ schema/Op :states cursor $ struct-with state
+                  d! $ schema/Op :draft cursor $ struct-with state
                     :draft $ decode-map-as (:value e) 'String
           :examples $ []
           :schema $ quote $ Fn app.schema/Draft (List respo.schema/CoordKey) (-> respo.schema/Component)
-        'comp-leaf $ %{} 'CodeEntry
-          :doc "|递归 Leaf 输入保持具体类型。map-indexed 回调返回值只在 Respo 开放子节点边界使用 Dynamic，因为正式 div API 接收原始 Element/Component，不接受 RenderNode 枚举；不扩大 Leaf 的业务类型。"
+        'comp-leaf $ %{} 'CodeEntry (:doc "|递归子节点是 Element 或 Component，保留 Respo 所需的原始子节点值。")
           :code $ quote $ defcomp comp-leaf (leaves level)
             div
               {} $ :style $ merge
@@ -95,7 +98,7 @@
                   .empty $ {} (:margin-left 8) (:margin-bottom 16)
               , & $ -> leaves $ map-indexed
                 fn (idx line)
-                  hint-fn $ Fn Number app.comp.container/Leaf $ -> Dynamic
+                  hint-fn $ Fn Number app.comp.container/Leaf $ -> app.comp.container/LeafChild
                   match line
                     (:branch children)
                       comp-leaf children $ inc level
@@ -335,9 +338,10 @@
           :examples $ []
           :schema $ quote StructDef
         'Op $ %{} 'CodeEntry
-          :doc "|States is the heterogeneous Respo/Reel UI-state protocol, not an untyped business operation. The reducer validates the root Draft through decode-store; hydration accepts only decoded Store."
+          :doc "|Draft updates carry a typed Draft. States remains the heterogeneous Respo/Reel protocol, and hydration accepts a decoded Store."
           :code $ quote $ defenum Op
             :states (List respo.schema/CoordKey) Dynamic
+            :draft (List respo.schema/CoordKey) app.schema/Draft
             :hydrate-storage app.schema/Store
           :examples $ []
           :schema $ quote EnumDef
@@ -418,6 +422,8 @@
                   decode-map-as
                     update-state-tree (:states store) cursor state
                     Map Dynamic Dynamic
+              (:draft cursor state)
+                recur store (schema/Op :states cursor state) op-id op-time
               (:hydrate-storage saved) saved
           :examples $ []
           :schema $ quote $ Fn app.schema/Store app.schema/Op String Number (-> app.schema/Store)
