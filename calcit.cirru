@@ -28,7 +28,7 @@
               :modules $ {} $ :codearea |@mvc-works/codearea
           :schema $ quote $ Fn Bool (-> Unit) (:features :js-ffi)
         'comp-container $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defcomp comp-container (reel)
+          :code $ quote $ defcomp comp-container (reel on-control)
             let
                 store $ :store reel
                 states $ :states store
@@ -63,10 +63,12 @@
                       d! $ schema/Op :draft cursor $ struct-with state
                         :hide-input? $ not $ :hide-input? state
                 if dev?
-                  Option :some $ comp-typed-reel (>> states :reel) reel $ {}
+                  Option :some $ comp-typed-reel (>> states :reel) reel ({}) on-control
                   Option :none
           :examples $ []
-          :schema $ quote $ Fn (reel.typed/State app.schema/Op app.schema/Store) (-> respo.schema/Component)
+          :schema $ quote $ Fn (reel.typed/State app.schema/Op app.schema/Store)
+            Fn reel.typed/Control $ -> Unit
+            -> respo.schema/Component
         'comp-editor $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-editor (state cursor)
             [] (effect-text)
@@ -231,18 +233,6 @@
           :code $ quote $ defref *reel (typed/new-reel schema/store)
           :examples $ []
           :schema $ quote $ Ref (reel.typed/State app.schema/Op app.schema/Store)
-        'dispatch! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn dispatch! (value)
-            match (typed/decode-control value)
-              (:some control)
-                do
-                  reset! *reel $ typed/apply-control updater @*reel control
-                  , &unit
-              (:none)
-                dispatch-op! $ decode-map-as value 'app.schema/Op
-            , &unit
-          :examples $ []
-          :schema $ quote $ Fn AnyEnum (-> Unit)
         'dispatch-op! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-op! (op)
             when config/dev? $ println |Dispatch: op
@@ -255,18 +245,16 @@
             println "|Running mode:" $ if config/dev? |dev |release
             render-app!
             watch-reel!
-            listen-devtools! |k $ fn (op)
-              hint-fn $ Fn AnyEnum $ -> Unit
-              dispatch! op
-            host/add-event-listener! |beforeunload $ fn (event)
-              hint-fn $ Fn js-ffi.browser/EventHost $ -> Unit
-              persist-storage!
-            repeat! 60 persist-storage!
+            listen-devtools! |k on-control!
             match
               js-nullish->option $ .get-item (host/window-local-storage) (:storage-key config/site)
               (:none) &unit
               (:some raw)
                 dispatch-op! $ schema/Op :hydrate-storage $ schema/decode-store (parse-cirru-edn raw)
+            host/add-event-listener! |beforeunload $ fn (event)
+              hint-fn $ Fn js-ffi.browser/EventHost $ -> Unit
+              persist-storage!
+            repeat! 60 persist-storage!
             println "|App started."
             , &unit
           :examples $ []
@@ -275,6 +263,12 @@
           :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
           :schema $ quote $ JsNullish respo.dom/DomElement
+        'on-control! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn on-control! (control)
+            reset! *reel $ typed/apply-control updater @*reel control
+            , &unit
+          :examples $ []
+          :schema $ quote $ Fn reel.typed/Control (-> Unit)
         'persist-storage! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-storage! ()
             .set-item! (host/window-local-storage) (:storage-key config/site)
@@ -298,7 +292,7 @@
           :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
-            render! mount-target (comp-container @*reel) dispatch!
+            render! mount-target (comp-container @*reel on-control!) dispatch-op!
             , &unit
           :examples $ []
           :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
@@ -346,9 +340,9 @@
           :examples $ []
           :schema $ quote EnumDef
         'Store $ %{} 'CodeEntry
-          :doc "|The shared Respo/Reel UI state tree has heterogeneous cursor keys and values. Keep that protocol map open while decoding the application's Draft fields concretely."
+          :doc "|State tree keys follow Respo CoordKey. Widget values remain open and draft fields are checked at the application boundary."
           :code $ quote $ defstruct Store
-            :states $ Map Dynamic Dynamic
+            :states $ Map respo.schema/CoordKey Dynamic
           :examples $ []
           :schema $ quote StructDef
         'decode-draft $ %{} 'CodeEntry
@@ -409,7 +403,7 @@
                   assoc states :data $ .to-map $ decode-draft draft
           :examples $ []
           :schema $ quote $ Fn app.schema/Store
-            -> $ Map Tag $ Map Dynamic Dynamic
+            -> $ Map Tag $ Map respo.schema/CoordKey Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
     'app.updater $ %{} 'FileEntry
@@ -421,7 +415,7 @@
                 schema/decode-store $ struct-with store $ :states
                   decode-map-as
                     update-state-tree (:states store) cursor state
-                    Map Dynamic Dynamic
+                    Map respo.schema/CoordKey Dynamic
               (:draft cursor state)
                 recur store (schema/Op :states cursor state) op-id op-time
               (:hydrate-storage saved) saved
