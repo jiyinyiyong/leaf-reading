@@ -8,13 +8,13 @@ Demo http://repo.tiye.me/tiye/leaf-reading/ .
 
 ### 使用者需要注意
 
-当前 CLI 与 `@calcit/procs` 配对使用正式版 0.38.0，使用 Node 24、Yarn 4.18.0。升级后重新安装依赖并构建前端。存档 key `workflow`、旧 Map 格式、文本内容、View 显隐及 60 秒自动保存保持不变。编辑器事件使用 Respo 的 `RespoEvent`，状态路径使用 `CoordKey`。编辑和 View 切换发送带有明确草稿类型的操作，递归页面子节点使用 `Element | Component`。 Reel 面板和快捷键使用具名 `Control` 回调。自动保存会在存档恢复成功后启用。
+当前 CLI 与 `@calcit/procs` 配对使用正式版 0.40.0，使用 Node 24、Yarn 4.18.0。升级后重新安装依赖并构建前端。存档 key `workflow`、旧 Map 格式、文本内容、View 显隐及 60 秒自动保存保持不变。编辑器事件使用 Respo 的 `RespoEvent`，状态路径使用 `CoordKey`。编辑和 View 切换发送带有明确草稿类型的操作，递归页面子节点使用 `Element | Component`。 Reel 面板和快捷键使用具名 `Control` 回调。自动保存会在存档恢复成功后启用。
 
 此前内部 `comp-leaf` 删除从不参与样式计算、只递归传递 nil 的参数，改为 `(leaves level)`。调用此应用内部辅助组件的代码需要同步重编译；层级解析、缩进和页面布局不变。`indentation` / `dev?` 声明为真实 String / Bool，存档外层类型收紧为 `Map<Tag, Map<CoordKey,Dynamic>>`；异构状态树仍如实保留开放类型，不增加强转或预算。
 
 ### Development
 
-Use the released Calcit/procs 0.38.0 pair, Node 24 and Yarn 4.18.0. `calcit.cirru` is the canonical
+Use the released Calcit/procs 0.40.0 pair, Node 24 and Yarn 4.18.0. `calcit.cirru` is the canonical
 source; `deps.cirru` pins the compiler and published module releases.
 The retired `compact.cirru` is no longer used or tracked.
 Declared published module tags are Respo 0.19.5, UI 0.15.2, Reel 0.11.0 and js-ffi 0.2.13.
