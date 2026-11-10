@@ -348,16 +348,17 @@
         'decode-draft $ %{} 'CodeEntry
           :doc "|Validate legacy saved draft maps and current Draft fields at the open UI-state boundary; only missing local state defaults. Business draft and visibility remain concrete."
           :code $ quote $ defn decode-draft (raw)
-            if (nil? raw) default-draft $ decode-map-as
-              if (struct? raw) (.to-map raw) raw
-              , 'app.schema/Draft
+            if (nil? raw) default-draft $ if (struct? raw)
+              struct-match raw (Draft draft draft)
+                _ external $ decode-map-as (&struct:to-map external) 'app.schema/Draft
+              decode-map-as raw 'app.schema/Draft
           :examples $ []
-          :schema $ quote $ Fn Dynamic (-> app.schema/Draft)
+          :schema $ quote $ Fn Input (-> app.schema/Draft) (:generics Input)
         'decode-store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-store (raw)
             let
                 base $ decode-map-as
-                  if (struct? raw) (.to-map raw) raw
+                  if (struct? raw) (&struct:to-map raw) raw
                   , 'app.schema/Store
                 states $ :states base
               struct-with base $ :states $ match (get states :data)
@@ -365,7 +366,7 @@
                 (:some draft)
                   assoc states :data $ decode-draft draft
           :examples $ []
-          :schema $ quote $ Fn Dynamic (-> app.schema/Store)
+          :schema $ quote $ Fn Input (-> app.schema/Store) (:generics Input)
           :tests $ [] $ %{} 'TestEntry (:name |legacy-draft-preservation)
             :code $ quote $ let
                 raw $ {} $ :states
