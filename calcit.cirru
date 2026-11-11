@@ -50,8 +50,8 @@
                 space-x 8
                 if
                   not $ :hide-input? state
-                  Option :some $ comp-editor state cursor
-                  Option :none
+                  Some $ comp-editor state cursor
+                  , None
                 div ({})
                   a $ {}
                     :style $ merge ui/link $ {} (:position :absolute) (:right 8) (:bottom 8)
@@ -63,10 +63,10 @@
                       d! $ schema/Op :draft cursor $ struct-with state
                         :hide-input? $ not $ :hide-input? state
                 if dev?
-                  Option :some $ comp-typed-reel (>> states :reel) reel ({}) on-control
-                  Option :none
+                  Some $ comp-typed-reel (>> states :reel) reel ({}) on-control
+                  , None
           :examples $ []
-          :schema $ quote $ Fn (reel.typed/State app.schema/Op app.schema/Store)
+          :schema $ quote $ Fn (reel.typed/State schema/Op schema/Store)
             Fn reel.typed/Control $ -> Unit
             -> respo.schema/Component
         'comp-editor $ %{} 'CodeEntry (:doc |)
@@ -84,7 +84,7 @@
                   d! $ schema/Op :draft cursor $ struct-with state
                     :draft $ decode-map-as (:value e) 'String
           :examples $ []
-          :schema $ quote $ Fn app.schema/Draft (List respo.schema/CoordKey) (-> respo.schema/Component)
+          :schema $ quote $ Fn schema/Draft (List respo.schema/CoordKey) (-> respo.schema/Component)
         'comp-leaf $ %{} 'CodeEntry (:doc "|递归子节点是 Element 或 Component，保留 Respo 所需的原始子节点值。")
           :code $ quote $ defcomp comp-leaf (leaves level)
             div
@@ -116,7 +116,7 @@
                             <> |_
                           <> text
           :examples $ []
-          :schema $ quote $ Fn (List app.comp.container/Leaf) Number (-> respo.schema/Component)
+          :schema $ quote $ Fn (List Leaf) Number (-> respo.schema/Component)
         'effect-text $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defeffect effect-text () (action el a)
             match (decode-map-as action 'Tag)
@@ -133,8 +133,8 @@
           :code $ quote $ defn pack-buffer (acc buffer)
             if (empty? buffer) acc $ .append acc $ Leaf :branch (parse-leaves buffer)
           :examples $ []
-          :schema $ quote $ Fn (List app.comp.container/Leaf) (List String)
-            -> $ List app.comp.container/Leaf
+          :schema $ quote $ Fn (List Leaf) (List String)
+            -> $ List Leaf
         'parse-leaves $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn parse-leaves (lines0)
             loop
@@ -175,7 +175,7 @@
                           , false false $ rest lines
           :examples $ []
           :schema $ quote $ Fn (List String)
-            -> $ List app.comp.container/Leaf
+            -> $ List Leaf
           :tests $ [] $ %{} 'TestEntry (:name |legacy-layout)
             :code $ quote $ do
               assert= ([])
@@ -224,7 +224,7 @@
         'site $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def site (Site :storage-key |workflow)
           :examples $ []
-          :schema $ quote app.config/Site
+          :schema $ quote Site
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.config
     'app.main $ %{} 'FileEntry
@@ -232,14 +232,14 @@
         '*reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *reel (typed/new-reel schema/store)
           :examples $ []
-          :schema $ quote $ Ref (reel.typed/State app.schema/Op app.schema/Store)
+          :schema $ quote $ Ref (typed/State schema/Op schema/Store)
         'dispatch-op! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-op! (op)
             when config/dev? $ println |Dispatch: op
             reset! *reel $ typed/record-op updater @*reel op (generate-id!) (shared/now-ms)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn app.schema/Op (-> Unit)
+          :schema $ quote $ Fn schema/Op (-> Unit)
         'main! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn main! () (load-console-formatter!)
             println "|Running mode:" $ if config/dev? |dev |release
@@ -268,7 +268,7 @@
             reset! *reel $ typed/apply-control updater @*reel control
             , &unit
           :examples $ []
-          :schema $ quote $ Fn reel.typed/Control (-> Unit)
+          :schema $ quote $ Fn typed/Control (-> Unit)
         'persist-storage! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-storage! ()
             .set-item! (host/window-local-storage) (:storage-key config/site)
@@ -353,7 +353,7 @@
                 _ external $ decode-map-as (&struct:to-map external) 'app.schema/Draft
               decode-map-as raw 'app.schema/Draft
           :examples $ []
-          :schema $ quote $ Fn Input (-> app.schema/Draft) (:generics Input)
+          :schema $ quote $ Fn Input (-> Draft) (:generics Input)
         'decode-store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-store (raw)
             let
@@ -366,7 +366,7 @@
                 (:some draft)
                   assoc states :data $ decode-draft draft
           :examples $ []
-          :schema $ quote $ Fn Input (-> app.schema/Store) (:generics Input)
+          :schema $ quote $ Fn Input (-> Store) (:generics Input)
           :tests $ [] $ %{} 'TestEntry (:name |legacy-draft-preservation)
             :code $ quote $ let
                 raw $ {} $ :states
@@ -388,12 +388,12 @@
         'default-draft $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def default-draft (Draft :draft | :hide-input? false)
           :examples $ []
-          :schema $ quote app.schema/Draft
+          :schema $ quote Draft
         'store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def store
             Store :states $ {} $ :cursor ([])
           :examples $ []
-          :schema $ quote app.schema/Store
+          :schema $ quote Store
         'store-wire $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn store-wire (store)
             let
@@ -403,7 +403,7 @@
                 (:some draft)
                   assoc states :data $ .to-map $ decode-draft draft
           :examples $ []
-          :schema $ quote $ Fn app.schema/Store
+          :schema $ quote $ Fn Store
             -> $ Map Tag $ Map respo.schema/CoordKey Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
@@ -421,7 +421,7 @@
                 recur store (schema/Op :states cursor state) op-id op-time
               (:hydrate-storage saved) saved
           :examples $ []
-          :schema $ quote $ Fn app.schema/Store app.schema/Op String Number (-> app.schema/Store)
+          :schema $ quote $ Fn schema/Store schema/Op String Number (-> schema/Store)
           :tests $ [] $ %{} 'TestEntry (:name |root-and-reel-state)
             :code $ quote $ let
                 edited $ updater schema/store
