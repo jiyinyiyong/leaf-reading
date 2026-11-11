@@ -58,7 +58,7 @@
                     :inner-text |View
                     :on-click $ fn (e d!)
                       hint-fn $ Fn respo.schema/RespoEvent
-                        Fn app.schema/Op $ -> Unit
+                        Fn schema/Op $ -> Unit
                         -> Unit
                       d! $ schema/Op :draft cursor $ struct-with state
                         :hide-input? $ not $ :hide-input? state
@@ -79,7 +79,7 @@
                 :style $ merge ui/expand ui/textarea $ {} (:font-family ui/font-code)
                 :on-input $ fn (e d!)
                   hint-fn $ Fn respo.schema/RespoEvent
-                    Fn app.schema/Op $ -> Unit
+                    Fn schema/Op $ -> Unit
                     -> Unit
                   d! $ schema/Op :draft cursor $ struct-with state
                     :draft $ decode-map-as (:value e) 'String
@@ -100,7 +100,7 @@
                   .empty $ {} (:margin-left 8) (:margin-bottom 16)
               , & $ -> leaves $ map-indexed
                 fn (idx line)
-                  hint-fn $ Fn Number app.comp.container/Leaf $ -> app.comp.container/LeafChild
+                  hint-fn $ Fn Number Leaf $ -> LeafChild
                   match line
                     (:branch children)
                       comp-leaf children $ inc level
@@ -143,8 +143,8 @@
                 indented? false
                 gap? false
                 lines lines0
-              hint-fn $ Fn (List app.comp.container/Leaf) (List String) Bool Bool (List String)
-                -> $ List app.comp.container/Leaf
+              hint-fn $ Fn (List Leaf) (List String) Bool Bool (List String)
+                -> $ List Leaf
               if (empty? lines) (pack-buffer acc buffer)
                 let
                     l0 $ .unwrap $ first lines
@@ -252,7 +252,7 @@
               (:some raw)
                 dispatch-op! $ schema/Op :hydrate-storage $ schema/decode-store (parse-cirru-edn raw)
             host/add-event-listener! |beforeunload $ fn (event)
-              hint-fn $ Fn js-ffi.browser/EventHost $ -> Unit
+              hint-fn $ Fn host/EventHost $ -> Unit
               persist-storage!
             repeat! 60 persist-storage!
             println "|App started."
@@ -307,7 +307,7 @@
         'watch-reel! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn watch-reel! ()
             add-watch! *reel :changes $ fn (reel prev)
-              hint-fn $ Fn (reel.typed/State app.schema/Op app.schema/Store) (reel.typed/State app.schema/Op app.schema/Store) (-> Unit)
+              hint-fn $ Fn (typed/State schema/Op schema/Store) (typed/State schema/Op schema/Store) (-> Unit)
               render-app!
               , &unit
             , &unit
