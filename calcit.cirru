@@ -239,7 +239,7 @@
             reset! *reel $ typed/record-op updater @*reel op (generate-id!) (shared/now-ms)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/Op (-> Unit)
+          :schema $ quote $ Fn schema/Op (-> Unit) (:features :io :state)
         'main! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn main! () (load-console-formatter!)
             println "|Running mode:" $ if config/dev? |dev |release
@@ -258,7 +258,7 @@
             println "|App started."
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn (-> Unit) (:features :io :js-ffi :state)
         'mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
@@ -268,13 +268,13 @@
             reset! *reel $ typed/apply-control updater @*reel control
             , &unit
           :examples $ []
-          :schema $ quote $ Fn typed/Control (-> Unit)
+          :schema $ quote $ Fn typed/Control (-> Unit) (:features :state)
         'persist-storage! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-storage! ()
             .set-item! (host/window-local-storage) (:storage-key config/site)
               format-cirru-edn $ schema/store-wire $ :store @*reel
           :examples $ []
-          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn (-> Unit) (:features :js-ffi :state)
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             let
@@ -289,13 +289,13 @@
             reset! *reel $ typed/refresh updater @*reel schema/store
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn (-> Unit) (:features :io :js-ffi :state)
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
             render! mount-target (comp-container @*reel on-control!) dispatch-op!
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn (-> Unit) (:features :io :js-ffi :state)
         'repeat! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn repeat! (duration cb)
             host/set-interval! cb $ * 1000 duration
@@ -312,7 +312,7 @@
               , &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.main
           :require
@@ -332,17 +332,21 @@
           :examples $ []
           :schema $ quote StructDef
         'Op $ %{} 'CodeEntry
-          :doc "|Draft updates carry a typed Draft. States remains the heterogeneous Respo/Reel protocol, and hydration accepts a decoded Store."
+          :doc "|Draft updates carry a typed Draft. States carries the recursive Respo/Reel state value, and hydration accepts a decoded Store."
           :code $ quote $ defenum Op
-            :states (List respo.schema/CoordKey) Dynamic
+            :states (List respo.schema/CoordKey) StateValue
             :draft (List respo.schema/CoordKey) app.schema/Draft
             :hydrate-storage app.schema/Store
           :examples $ []
           :schema $ quote EnumDef
+        'StateValue $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defunion StateValue Bool Number String Tag Draft (List StateValue) (Map respo.schema/CoordKey StateValue)
+          :examples $ []
+          :schema $ quote UnionDef
         'Store $ %{} 'CodeEntry
-          :doc "|State tree keys follow Respo CoordKey. Widget values remain open and draft fields are checked at the application boundary."
+          :doc "|State tree keys follow Respo CoordKey. StateValue enumerates widget payloads, including typed drafts and legacy data."
           :code $ quote $ defstruct Store
-            :states $ Map respo.schema/CoordKey Dynamic
+            :states $ Map respo.schema/CoordKey app.schema/StateValue
           :examples $ []
           :schema $ quote StructDef
         'decode-draft $ %{} 'CodeEntry
@@ -357,14 +361,18 @@
         'decode-store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-store (raw)
             let
-                base $ decode-map-as
+                fields $ decode-map-as
                   if (struct? raw) (&struct:to-map raw) raw
-                  , 'app.schema/Store
-                states $ :states base
-              struct-with base $ :states $ match (get states :data)
-                (:none) states
-                (:some draft)
-                  assoc states :data $ decode-draft draft
+                  Map Tag Dynamic
+                states $ match (get fields :states)
+                  (:some value)
+                    decode-map-as value $ Map respo.schema/CoordKey Dynamic
+                  (:none) (raise "|Missing :states in saved store")
+                normalized $ match (get states :data)
+                  (:none) states
+                  (:some draft)
+                    assoc states :data $ decode-draft draft
+              decode-map-as (assoc fields :states normalized) 'app.schema/Store
           :examples $ []
           :schema $ quote $ Fn Input (-> Store) (:generics Input)
           :tests $ [] $ %{} 'TestEntry (:name |legacy-draft-preservation)
@@ -383,7 +391,13 @@
                 {} $ :data 2
                 .unwrap $ get (:states restored) :reel
               assert= restored $ decode-store restored
+              assert= restored $ decode-store $ parse-cirru-edn
+                format-cirru-edn $ store-wire restored
               assert= default-draft $ decode-draft nil
+              assert= default-draft $ .unwrap $ get
+                :states $ decode-store $ {}
+                  :states $ {} $ :data nil
+                , :data
               , &unit
         'default-draft $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def default-draft (Draft :draft | :hide-input? false)
@@ -401,10 +415,16 @@
               {} $ :states $ match (get states :data)
                 (:none) states
                 (:some draft)
-                  assoc states :data $ .to-map $ decode-draft draft
+                  let
+                      typed $ decode-draft draft
+                    assoc states :data $ decode-map-as
+                      {}
+                        :draft $ :draft typed
+                        :hide-input? $ :hide-input? typed
+                      , StateValue
           :examples $ []
           :schema $ quote $ Fn Store
-            -> $ Map Tag $ Map respo.schema/CoordKey Dynamic
+            -> $ Map Tag $ Map respo.schema/CoordKey StateValue
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
     'app.updater $ %{} 'FileEntry
@@ -416,7 +436,7 @@
                 schema/decode-store $ struct-with store $ :states
                   decode-map-as
                     update-state-tree (:states store) cursor state
-                    Map respo.schema/CoordKey Dynamic
+                    Map respo.schema/CoordKey app.schema/StateValue
               (:draft cursor state)
                 recur store (schema/Op :states cursor state) op-id op-time
               (:hydrate-storage saved) saved
