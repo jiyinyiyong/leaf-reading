@@ -69,6 +69,7 @@
           :schema $ quote $ Fn (reel.typed/State schema/Op schema/Store)
             Fn reel.typed/Control $ -> Unit
             -> respo.schema/Component
+            :features :state
         'comp-editor $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-editor (state cursor)
             [] (effect-text)
@@ -253,8 +254,8 @@
                 dispatch-op! $ schema/Op :hydrate-storage $ schema/decode-store (parse-cirru-edn raw)
             host/add-event-listener! |beforeunload $ fn (event)
               hint-fn $ Fn host/EventHost $ -> Unit
-              persist-storage!
-            repeat! 60 persist-storage!
+              (fn () (persist-storage!))
+            repeat! 60 $ fn () $ persist-storage!
             println "|App started."
             , &unit
           :examples $ []
@@ -292,7 +293,9 @@
           :schema $ quote $ Fn (-> Unit) (:features :io :js-ffi :state)
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
-            render! mount-target (comp-container @*reel on-control!) dispatch-op!
+            render! mount-target
+              comp-container @*reel $ fn (op) (on-control! op)
+              , dispatch-op!
             , &unit
           :examples $ []
           :schema $ quote $ Fn (-> Unit) (:features :io :js-ffi :state)
